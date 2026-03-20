@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package capability;
+
+option go_package = "github.com/Mozart-SymphonIA/infra-mz/proto/capability";
+
+// Servicio genérico para exponer capacidades de dominio
+service CapabilityService {
+  // GetData: Para consultas de lectura (Read).
+  // Permite obtener datos de entidades como 'concepts', 'capabilities', etc.
+  rpc GetData(GetDataRequest) returns (GetDataResponse);
+
+  // ExecuteAction: Para comandos de escritura (Write).
+  // Permite ejecutar acciones como 'register_transaction', 'update_user', etc.
+  rpc ExecuteAction(ActionRequest) returns (ActionResponse);
+}
+
+message GetDataRequest {
+  // Nombre de la entidad a consultar (ej: "concepts", "transactions")
+  string entity_name = 1;
+  // Parámetros de filtrado en formato JSON string
+  string query_params = 2;
+}
+
+message GetDataResponse {
+  // Payload de respuesta en formato JSON o TOON
+  string data_payload = 1;
+}
+
+message ActionRequest {
+  // Nombre de la acción a ejecutar (ej: "register_transaction")
+  string action_name = 1;
+  // Datos necesarios para la acción en formato JSON string
+  string payload = 2;
+}
+
+message ActionResponse {
+  // Indica si la acción fue exitosa
+  bool success = 1;
+  // Mensaje descriptivo o de error
+  string message = 2;
+  // Datos resultantes opcionales en formato JSON string
+  string data_payload = 3;
+}

@@ -1,0 +1,46 @@
+package yagniexclude
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func (p *rabbitPublisher) PublishToExchange(ctx context.Context, exchangeName string, routingKey string, payload []byte, opts ...PubOpt) error {
+	o := pubOptions{}
+	for _, fn := range opts {
+		fn(&o)
+	}
+
+	pub := amqp.Publishing{
+		Headers:      amqp.Table{},
+		ContentType:  "application/octet-stream",
+		DeliveryMode: amqp.Persistent,
+		Timestamp:    time.Now(),
+		Body:         payload,
+	}
+	for k, v := range o.Headers {
+		pub.Headers[k] = v
+	}
+
+	if err := p.ch.PublishWithContext(ctx, exchangeName, routingKey, o.Mandatory, false, pub); err != nil {
+		p.ob.OnPublishToExchange(exchangeName, routingKey, len(payload), err)
+		return err
+	}
+	if p.useConf {
+		select {
+		case conf, ok := <-p.confirms:
+			if !ok || !conf.Ack {
+				err := fmt.Errorf("publish to exchange not confirmed (ack=%v ok=%v)", conf.Ack, ok)
+				p.ob.OnPublishToExchange(exchangeName, routingKey, len(payload), err)
+				return err
+			}
+		case <-ctx.Done():
+			err := ctx.Err()
+			p.ob.OnPublishToExchange(exchangeName, routingKey, len(payload), err)
+			return err
+		}
+	}
+	p.ob.OnPublishToExchange(exchangeName, routingKey, len(payload), nil)
+	return nil
+}

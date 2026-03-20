@@ -1,0 +1,50 @@
+package yagniexclude
+
+import amqp "github.com/rabbitmq/amqp091-go"
+
+type ExchangeKind string
+
+const (
+	ExchangeDirect ExchangeKind = "direct"
+	ExchangeTopic  ExchangeKind = "topic"
+	ExchangeFanout ExchangeKind = "fanout"
+)
+
+type ExchangeSpec struct {
+	Name       string
+	Kind       ExchangeKind
+	Durable    bool
+	AutoDelete bool
+	Internal   bool
+	NoWait     bool
+	Args       amqp.Table
+}
+
+type QueueSpec struct {
+	Name       string
+	Durable    bool
+	AutoDelete bool
+	Exclusive  bool
+	NoWait     bool
+	Args       amqp.Table
+}
+
+type BindingSpec struct {
+	Queue    string
+	Key      string
+	Exchange string
+	NoWait   bool
+	Args     amqp.Table
+}
+
+func DeclareExchange(ch *amqp.Channel, x ExchangeSpec) error {
+	return ch.ExchangeDeclare(x.Name, string(x.Kind), x.Durable, x.AutoDelete, x.Internal, x.NoWait, x.Args)
+}
+
+func DeclareQueue(ch *amqp.Channel, q QueueSpec) (amqp.Queue, error) {
+	return ch.QueueDeclare(q.Name, q.Durable, q.AutoDelete, q.Exclusive, q.NoWait, q.Args)
+}
+
+func BindQueue(ch *amqp.Channel, b BindingSpec) error {
+	return ch.QueueBind(b.Queue, b.Key, b.Exchange, b.NoWait, b.Args)
+}
