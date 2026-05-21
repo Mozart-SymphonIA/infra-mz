@@ -39,3 +39,7 @@ func (s *sqlReader) Query(ctx context.Context, query string, args ...any) (strin
 func (s *sqlReader) QueryRow(ctx context.Context, query string, args ...any) dbx.Row {
 	return sqlRow{row: s.c.QueryRowContext(ctx, query, args...)}
 }
+
+func (s *sqlReader) QueryRows(ctx context.Context, query string, args ...any) (dbx.Rows, error) {
+	return s.c.QueryContext(ctx, query, args...)
+}
