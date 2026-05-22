@@ -24,7 +24,6 @@ var (
 // Claims represents the decoded payload of a Ganesha-issued JWT.
 type Claims struct {
 	Subject     string
-	TelegramID  int64
 	Username    string
 	Permissions []string
 	IssuedAt    time.Time

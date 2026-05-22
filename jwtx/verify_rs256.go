@@ -45,18 +45,12 @@ func parseClaims(payload []byte) (Claims, error) {
 	}
 
 	iat, _ := toInt64(raw["iat"])
-	tgID, err := toInt64(raw["tg"])
-	if err != nil {
-		return Claims{}, ErrInvalidToken
-	}
-
 	sub, _ := raw["sub"].(string)
 	username, _ := raw["u"].(string)
 	perms := parsePerms(raw["p"])
 
 	return Claims{
 		Subject:     sub,
-		TelegramID:  tgID,
 		Username:    username,
 		Permissions: perms,
 		IssuedAt:    time.Unix(iat, 0).UTC(),
