@@ -31,6 +31,16 @@ type Claims struct {
 	ExpiresAt   time.Time
 }
 
+// HasPermission reports whether the claims include the given permission.
+func (c Claims) HasPermission(permission string) bool {
+	for _, p := range c.Permissions {
+		if p == permission {
+			return true
+		}
+	}
+	return false
+}
+
 // Verifier fetches the JWKS from Ganesha once, caches the public key,
 // and verifies tokens locally on every call.
 type Verifier struct {
