@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -36,4 +37,11 @@ func OkJSON(w http.ResponseWriter, body string) {
 
 func OkTSV(w http.ResponseWriter, body string) {
 	writeText(w, http.StatusOK, contentTypeTSV, body)
+}
+
+// WriteJSON encodes body as JSON and writes it with the given status code.
+func WriteJSON(w http.ResponseWriter, status int, body any) error {
+	w.Header().Set("Content-Type", contentTypeJSON)
+	w.WriteHeader(status)
+	return json.NewEncoder(w).Encode(body)
 }
