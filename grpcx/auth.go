@@ -63,17 +63,27 @@ func NewAuthInterceptor(v *jwtx.Verifier, actionPolicy map[string]string) grpc.U
 }
 
 // NewSharedAccountInterceptor returns a gRPC unary interceptor that checks
-// whether the caller has the invoked action on the shared account referenced
-// in the request. It relies on Claims already being in the context (i.e. must
-// run after NewAuthInterceptor).
+// whether the caller has the required per-account permission for the invoked
+// action. It relies on Claims already being in the context (must run after
+// NewAuthInterceptor).
 //
-// The request must implement GetSharedAccountId() string; if it does not, the
-// interceptor passes through without checking (not a shared-account method).
-func NewSharedAccountInterceptor() grpc.UnaryServerInterceptor {
+// sharedAccountActionPolicy maps snake_case action names to the per-account
+// permission they require, e.g. "register_shared_transaction" → "finance:sa:write".
+// It is loaded at startup from Ganesha's GetSharedAccountActionPolicy RPC.
+//
+// The request must implement GetSharedAccountId() string. Methods not present
+// in the policy map pass through without checking.
+func NewSharedAccountInterceptor(sharedAccountActionPolicy map[string]string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		action := methodToAction(info.FullMethod)
+		requiredPermission, inPolicy := sharedAccountActionPolicy[action]
+		if !inPolicy {
+			return handler(ctx, req)
+		}
+
 		sar, ok := req.(interface{ GetSharedAccountId() string })
 		if !ok || sar.GetSharedAccountId() == "" {
-			return handler(ctx, req)
+			return nil, status.Errorf(codes.InvalidArgument, "shared_account_id required for action: %s", action)
 		}
 
 		claims, ok := ClaimsFromContext(ctx)
@@ -81,8 +91,7 @@ func NewSharedAccountInterceptor() grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unauthenticated, "missing claims")
 		}
 
-		action := methodToAction(info.FullMethod)
-		if !claims.HasSharedAccountPermission(sar.GetSharedAccountId(), action) {
+		if !claims.HasSharedAccountPermission(sar.GetSharedAccountId(), requiredPermission) {
 			return nil, status.Error(codes.PermissionDenied, "not authorized for this shared account")
 		}
 
