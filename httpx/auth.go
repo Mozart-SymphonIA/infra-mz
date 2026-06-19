@@ -59,13 +59,19 @@ func NewAuthMiddleware(v *jwtx.Verifier, cookieName, requiredPermission string) 
 }
 
 // NewSharedAccountMiddleware returns an HTTP middleware that checks whether
-// the caller has the given action on the shared account identified by the
-// {id} path parameter. It relies on Claims already being in the context
-// (i.e. must be chained after NewAuthMiddleware).
+// the caller holds the permission required for the given action on the shared
+// account identified by the {id} path parameter. It relies on Claims already
+// being in the context (i.e. must be chained after NewAuthMiddleware).
 //
-// action matches the operation name in snake_case,
-// e.g. "get_shared_account_summary".
-func NewSharedAccountMiddleware(action string) func(http.Handler) http.Handler {
+// policy maps action names to the required permission string, as loaded from
+// Ganesha at startup. Panics if action is not present in the policy — this
+// catches misconfiguration at boot time rather than silently allowing access.
+func NewSharedAccountMiddleware(policy map[string]string, action string) func(http.Handler) http.Handler {
+	permission, ok := policy[action]
+	if !ok || permission == "" {
+		panic("httpx: shared account policy has no permission for action: " + action)
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := ClaimsFromContext(r.Context())
@@ -74,7 +80,7 @@ func NewSharedAccountMiddleware(action string) func(http.Handler) http.Handler {
 				return
 			}
 			accountID := r.PathValue("id")
-			if !claims.HasSharedAccountPermission(accountID, action) {
+			if !claims.HasSharedAccountPermission(accountID, permission) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
