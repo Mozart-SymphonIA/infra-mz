@@ -48,14 +48,39 @@ func parseClaims(payload []byte) (Claims, error) {
 	sub, _ := raw["sub"].(string)
 	username, _ := raw["u"].(string)
 	perms := parsePerms(raw["p"])
+	sharedAccounts := parseSharedAccounts(raw["sa"])
 
 	return Claims{
-		Subject:     sub,
-		Username:    username,
-		Permissions: perms,
-		IssuedAt:    time.Unix(iat, 0).UTC(),
-		ExpiresAt:   expiresAt,
+		Subject:        sub,
+		Username:       username,
+		Permissions:    perms,
+		SharedAccounts: sharedAccounts,
+		IssuedAt:       time.Unix(iat, 0).UTC(),
+		ExpiresAt:      expiresAt,
 	}, nil
+}
+
+func parseSharedAccounts(v any) []SharedAccountClaim {
+	raw, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]SharedAccountClaim, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := m["id"].(string)
+		if id == "" {
+			continue
+		}
+		out = append(out, SharedAccountClaim{
+			ID:          id,
+			Permissions: parsePerms(m["p"]),
+		})
+	}
+	return out
 }
 
 func parsePerms(v any) []string {

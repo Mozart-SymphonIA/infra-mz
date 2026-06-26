@@ -13,9 +13,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type claimsKey struct{}
+
+// ClaimsFromContext returns the JWT claims injected by NewAuthInterceptor.
+func ClaimsFromContext(ctx context.Context) (jwtx.Claims, bool) {
+	c, ok := ctx.Value(claimsKey{}).(jwtx.Claims)
+	return c, ok
+}
+
 // NewAuthInterceptor returns a gRPC unary interceptor that verifies the JWT
-// from the incoming metadata and checks that the caller has the permission
-// required for the invoked method (looked up from actionPolicy).
+// from the incoming metadata, checks that the caller has the permission
+// required for the invoked method (looked up from actionPolicy), and injects
+// the full Claims into the context for downstream handlers.
 //
 // actionPolicy maps snake_case action names to required permissions,
 // e.g. "register_transaction" → "finance:basic".
@@ -46,6 +55,44 @@ func NewAuthInterceptor(v *jwtx.Verifier, actionPolicy map[string]string) grpc.U
 
 		if !claims.HasPermission(requiredPermission) {
 			return nil, status.Error(codes.PermissionDenied, "permission denied")
+		}
+
+		ctx = context.WithValue(ctx, claimsKey{}, claims)
+		return handler(ctx, req)
+	}
+}
+
+// NewSharedAccountInterceptor returns a gRPC unary interceptor that checks
+// whether the caller has the required per-account permission for the invoked
+// action. It relies on Claims already being in the context (must run after
+// NewAuthInterceptor).
+//
+// sharedAccountActionPolicy maps snake_case action names to the per-account
+// permission they require, e.g. "register_shared_transaction" → "finance:sa:write".
+// It is loaded at startup from Ganesha's GetSharedAccountActionPolicy RPC.
+//
+// The request must implement GetSharedAccountId() string. Methods not present
+// in the policy map pass through without checking.
+func NewSharedAccountInterceptor(sharedAccountActionPolicy map[string]string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		action := methodToAction(info.FullMethod)
+		requiredPermission, inPolicy := sharedAccountActionPolicy[action]
+		if !inPolicy {
+			return handler(ctx, req)
+		}
+
+		sar, ok := req.(interface{ GetSharedAccountId() string })
+		if !ok || sar.GetSharedAccountId() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "shared_account_id required for action: %s", action)
+		}
+
+		claims, ok := ClaimsFromContext(ctx)
+		if !ok {
+			return nil, status.Error(codes.Unauthenticated, "missing claims")
+		}
+
+		if !claims.HasSharedAccountPermission(sar.GetSharedAccountId(), requiredPermission) {
+			return nil, status.Error(codes.PermissionDenied, "not authorized for this shared account")
 		}
 
 		return handler(ctx, req)

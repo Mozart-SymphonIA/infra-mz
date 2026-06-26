@@ -21,20 +21,44 @@ var (
 	ErrTokenExpired = errors.New("token expired")
 )
 
-// Claims represents the decoded payload of a Ganesha-issued JWT.
-type Claims struct {
-	Subject     string
-	Username    string
+// SharedAccountClaim holds the permissions a user has on a specific shared account.
+type SharedAccountClaim struct {
+	ID          string
 	Permissions []string
-	IssuedAt    time.Time
-	ExpiresAt   time.Time
 }
 
-// HasPermission reports whether the claims include the given permission.
+// Claims represents the decoded payload of a Ganesha-issued JWT.
+type Claims struct {
+	Subject        string
+	Username       string
+	Permissions    []string
+	SharedAccounts []SharedAccountClaim
+	IssuedAt       time.Time
+	ExpiresAt      time.Time
+}
+
+// HasPermission reports whether the claims include the given global permission.
 func (c Claims) HasPermission(permission string) bool {
 	for _, p := range c.Permissions {
 		if p == permission {
 			return true
+		}
+	}
+	return false
+}
+
+// HasSharedAccountPermission reports whether the user has the given permission
+// on a specific shared account. The permission string matches the gRPC method
+// name in snake_case (e.g. "register_shared_transaction").
+func (c Claims) HasSharedAccountPermission(accountID, permission string) bool {
+	for _, sa := range c.SharedAccounts {
+		if sa.ID != accountID {
+			continue
+		}
+		for _, p := range sa.Permissions {
+			if p == permission {
+				return true
+			}
 		}
 	}
 	return false
