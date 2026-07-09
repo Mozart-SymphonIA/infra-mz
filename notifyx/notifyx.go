@@ -11,3 +11,8 @@ type Handler func(ctx context.Context, payload string)
 type Listener interface {
 	Listen(ctx context.Context, channel string, handler Handler) error
 }
+
+// Publisher emite notificaciones a un canal de Postgres via pg_notify.
+type Publisher interface {
+	Publish(ctx context.Context, channel, payload string) error
+}
